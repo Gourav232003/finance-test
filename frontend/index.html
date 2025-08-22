@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>₹ FinTrack AI — India</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-slate-50 text-slate-900">
+  <div class="max-w-7xl mx-auto p-4">
+    <!-- Header -->
+    <header class="flex items-center gap-3 py-3">
+      <div class="text-xl font-semibold">₹ FinTrack <span class="text-slate-500">AI</span> — India</div>
+      <div class="ml-auto flex items-center gap-2">
+        <input id="file" type="file" accept=".csv,.pdf" class="text-sm" />
+        <button id="uploadBtn" class="px-3 py-1.5 rounded bg-blue-600 text-white">Upload & Analyze</button>
+      </div>
+    </header>
+
+    <!-- KPIs -->
+    <section class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
+      <div class="p-4 border rounded-2xl bg-white">
+        <div class="text-sm text-slate-500">Income</div>
+        <div id="income" class="text-2xl font-bold mt-1">₹0</div>
+      </div>
+      <div class="p-4 border rounded-2xl bg-white">
+        <div class="text-sm text-slate-500">Expenses</div>
+        <div id="expense" class="text-2xl font-bold mt-1">₹0</div>
+      </div>
+      <div class="p-4 border rounded-2xl bg-white">
+        <div class="text-sm text-slate-500">Net</div>
+        <div id="net" class="text-2xl font-bold mt-1">₹0</div>
+      </div>
+    </section>
+
+    <!-- Chart + Insights -->
+    <section class="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
+      <div class="p-4 border rounded-2xl bg-white lg:col-span-2">
+        <div class="font-semibold mb-2">Expenses by Category</div>
+        <canvas id="catChart" height="160"></canvas>
+      </div>
+      <div class="p-4 border rounded-2xl bg-white">
+        <div class="font-semibold mb-2">AI Insights</div>
+        <ul id="insights" class="space-y-2 text-sm"></ul>
+      </div>
+    </section>
+
+    <!-- Budgets & Bills -->
+    <section class="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+      <div class="p-4 border rounded-2xl bg-white">
+        <div class="flex items-center justify-between">
+          <div class="font-semibold">Budgets</div>
+          <form id="budgetForm" class="flex items-center gap-2 text-sm">
+            <input class="border rounded px-2 py-1" placeholder="Category" id="bcat"/>
+            <input class="border rounded px-2 py-1 w-24" placeholder="Limit" id="blim" type="number"/>
+            <button class="px-2 py-1 rounded bg-slate-800 text-white" type="submit">Save</button>
+          </form>
+        </div>
+        <div id="budgets" class="mt-3 space-y-2"></div>
+      </div>
+
+      <div class="p-4 border rounded-2xl bg-white">
+        <div class="flex items-center justify-between">
+          <div class="font-semibold">Upcoming Bills</div>
+          <form id="billForm" class="flex items-center gap-2 text-sm">
+            <input class="border rounded px-2 py-1" placeholder="Name" id="billname"/>
+            <input class="border rounded px-2 py-1" placeholder="YYYY-MM-DD" id="billdue"/>
+            <input class="border rounded px-2 py-1 w-24" placeholder="Amount" id="billamt" type="number"/>
+            <button class="px-2 py-1 rounded bg-slate-800 text-white" type="submit">Add</button>
+          </form>
+        </div>
+        <div id="bills" class="mt-3 space-y-2"></div>
+      </div>
+    </section>
+
+    <!-- Transactions -->
+    <section class="p-4 border rounded-2xl bg-white mt-4">
+      <div class="font-semibold mb-2">Recent Transactions</div>
+      <div class="overflow-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-50">
+            <tr>
+              <th class="text-left p-2">Date</th>
+              <th class="text-left p-2">Description</th>
+              <th class="text-right p-2">Amount</th>
+              <th class="text-left p-2">Mode</th>
+              <th class="text-left p-2">Category</th>
+            </tr>
+          </thead>
+          <tbody id="txBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <!-- Scripts -->
+  <script>
+    const API = "http://127.0.0.1:5000/api";
+    const inr = n => new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR",maximumFractionDigits:0}).format(n||0);
+    let catChart;
+
+    async function refreshAll() {
+      const res = await fetch(API + "/transactions");
+      const rows = await res.json();
+      document.getElementById("txBody").innerHTML = rows.map(r => `
+        <tr class="border-t">
+          <td class="p-2 whitespace-nowrap">${new Date(r.date).toLocaleDateString("en-IN")}</td>
+          <td class="p-2">${r.description}</td>
+          <td class="p-2 text-right ${r.amount < 0 ? "text-rose-600" : "text-emerald-600"}">
+            ${r.amount<0?'-':'+'}${inr(Math.abs(r.amount))}
+          </td>
+          <td class="p-2">${r.mode||""}</td>
+          <td class="p-2">${r.category||"Others"}</td>
+        </tr>`).join("");
+    }
+
+    async function loadBudgets() {
+      const res = await fetch(API + "/budgets");
+      const items = await res.json();
+      document.getElementById("budgets").innerHTML = items.map(b => `
+        <div class="border rounded-xl p-2 flex items-center justify-between">
+          <div>${b.category}</div>
+          <div class="text-slate-500">Limit: ${inr(b.limit)}</div>
+        </div>`).join("");
+    }
+
+    async function loadBills() {
+      const res = await fetch(API + "/bills");
+      const items = await res.json();
+      document.getElementById("bills").innerHTML = items.map(b => `
+        <div class="border rounded-xl p-2 flex items-center justify-between">
+          <div>
+            <div class="font-medium">${b.name}</div>
+            <div class="text-xs text-slate-500">Due: ${new Date(b.due).toDateString()}</div>
+          </div>
+          <div class="flex items-center gap-2">
+            <div class="font-semibold">${inr(b.amount)}</div>
+            <button class="px-2 py-1 rounded bg-rose-600 text-white" onclick="deleteBill(${b.id})">Delete</button>
+          </div>
+        </div>`).join("");
+    }
+
+    async function deleteBill(id) {
+      await fetch(API + "/bills?id=" + id, { method: "DELETE" });
+      await loadBills();
+    }
+
+    async function drawFromUploadPayload(payload) {
+      // KPIs
+      document.getElementById("income").textContent = inr(payload.summary.income);
+      document.getElementById("expense").textContent = inr(payload.summary.expense);
+      document.getElementById("net").textContent = inr(payload.summary.net);
+
+      // Insights
+      document.getElementById("insights").innerHTML = payload.insights.map(t =>
+        `<li class="p-2 border rounded-xl bg-slate-50">${t}</li>`).join("");
+
+      // Budgets
+      document.getElementById("budgets").innerHTML = Object.entries(payload.budgets).map(([cat, v]) => {
+        const percent = Math.round((v.spent / (v.limit || 1)) * 100);
+        return `
+          <div class="p-2 border rounded-xl">
+            <div class="flex items-center justify-between text-sm">
+              <div class="font-medium">${cat}</div>
+              <div class="text-slate-500">${inr(v.spent)} / ${inr(v.limit)} (${Math.min(percent,100)}%)</div>
+            </div>
+            <div class="w-full h-2 bg-slate-100 rounded mt-1">
+              <div class="h-2 rounded ${percent>100?'bg-rose-500':'bg-emerald-500'}"
+                   style="width:${Math.min(percent,100)}%"></div>
+            </div>
+          </div>`;
+      }).join("");
+
+      // Bills
+      document.getElementById("bills").innerHTML = payload.bills.map(b => `
+        <div class="border rounded-xl p-2 flex items-center justify-between ${b.soon?'ring-1 ring-amber-400':''}">
+          <div>
+            <div class="font-medium">${b.name}</div>
+            <div class="text-xs text-slate-500">Due: ${new Date(b.due).toDateString()}</div>
+          </div>
+          <div class="font-semibold">${inr(b.amount)}</div>
+        </div>`).join("");
+
+      // Chart
+      const labels = Object.keys(payload.by_category);
+      const values = Object.values(payload.by_category);
+      const ctx = document.getElementById("catChart").getContext("2d");
+      if (catChart) catChart.destroy();
+      catChart = new Chart(ctx, {
+        type: "doughnut",
+        data: { labels, datasets: [{ data: values }] },
+        options: { plugins: { legend: { position: "bottom" } } }
+      });
+
+      await refreshAll();
+    }
+
+    // === Events ===
+    document.getElementById("uploadBtn").addEventListener("click", async () => {
+      const input = document.getElementById("file");
+      if (!input.files.length) { alert("Choose a CSV or PDF."); return; }
+      const fd = new FormData();
+      fd.append("file", input.files[0]);
+      const res = await fetch(API + "/upload", { method: "POST", body: fd });
+      const payload = await res.json();
+      if (payload.error) { alert(payload.error); return; }
+      drawFromUploadPayload(payload);
+    });
+
+    document.getElementById("budgetForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const cat = document.getElementById("bcat").value;
+      const lim = document.getElementById("blim").value;
+      await fetch(API + "/budgets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ category: cat, limit: lim })
+      });
+      await loadBudgets();
+      document.getElementById("bcat").value = "";
+      document.getElementById("blim").value = "";
+    });
+
+    document.getElementById("billForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const name = document.getElementById("billname").value;
+      const due = document.getElementById("billdue").value;
+      const amount = document.getElementById("billamt").value;
+      await fetch(API + "/bills", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, due, amount })
+      });
+      await loadBills();
+      document.getElementById("billname").value = "";
+      document.getElementById("billdue").value = "";
+      document.getElementById("billamt").value = "";
+    });
+
+    // === Initial load ===
+    refreshAll();
+    loadBudgets();
+    loadBills();
+  </script>
+</body>
+</html>
+

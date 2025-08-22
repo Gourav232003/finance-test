@@ -1,0 +1,9 @@
+requirements = textwrap.dedent("""
+flask==3.0.3
+flask-cors==4.0.1
+pandas==2.2.2
+sqlalchemy==2.0.31
+python-dateutil==2.9.0.post0
+pdfplumber==0.11.4
+""").strip()
+open(os.path.join(backend_dir, "requirements.txt"), "w").write(requirements)
